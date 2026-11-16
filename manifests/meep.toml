@@ -1,0 +1,236 @@
+# Seam manifest — Meep 1.33 (in-process Python)
+# Derivation: seam/mappings/meep.md · Procedure: seam/agent/AGENT-PROTOCOL.md
+
+[seam]
+version = "0.1"
+profile = "L2"
+
+[identity]
+name = "meep-pulse-2d"
+adapter = "meep"
+domain = "photonics"
+code = "Meep 1.33.0-beta"
+entry = "python:/opt/conda/envs/mp/bin/python"
+description = "2D point source in a PML box. The reference case for genuine per-step liveness."
+
+[evidence]
+sources = [
+  "python:meep.Simulation.__init__ (signature, resolution/Courant/eps_averaging/dimensions)",
+  "python:meep.Simulation.run (until)",
+  "run:meep-extend-01 (until extended 60 -> 120 mid-run, run continued)",
+  "run:meep-stop-01 (stop flag honoured at the next callback)",
+]
+
+[cadence]
+poll = "1s"
+
+# ---------------------------------------------------------------------------
+# Writes: all sealed at construction, except two that ride the step callback.
+# ---------------------------------------------------------------------------
+
+[[param]]
+name = "resolution"
+group = "grid"
+precision = 0
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 8, hi = 200, step = 2, dtype = "int" }
+default = 24
+unit = "px/a"
+doc = "Grid resolution. The Yee grid is built from it, so it is fixed at construction."
+provenance = { grade = "E1", evidence = "signature", witness = "python:meep.Simulation.__init__", assumed = true }
+
+[[param]]
+name = "Courant"
+group = "grid"
+precision = 3
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 0.1, hi = 0.9, step = 0.05, dtype = "float" }
+default = 0.5
+doc = "Courant factor. Sets dt = Courant/resolution; changing it mid-run invalidates the integrator."
+provenance = { grade = "E1", evidence = "signature", witness = "python:meep.Simulation.__init__(Courant)" }
+
+[[param]]
+name = "pml_thickness"
+group = "grid"
+precision = 3
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 0.2, hi = 4.0, step = 0.2, dtype = "float" }
+default = 1.0
+unit = "a"
+doc = "PML thickness in Meep length units. Part of the boundary layer list, built at construction."
+provenance = { grade = "E1", evidence = "source", witness = "python:meep.PML(thickness)" }
+
+[[param]]
+name = "dimensions"
+group = "grid"
+precision = 0
+affordance = "ratchet"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "enum", values = [1, 2, 3] }
+default = 2
+doc = "Spatial rank. Changing it changes the whole geometry type, not just a number."
+provenance = { grade = "E1", evidence = "signature", witness = "python:meep.Simulation.__init__(dimensions)" }
+
+[[param]]
+name = "eps_averaging"
+group = "numerics"
+affordance = "ratchet"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "enum", values = [true, false] }
+default = true
+doc = "Subpixel smoothing of the dielectric function. Construction-time."
+provenance = { grade = "E1", evidence = "signature", witness = "python:meep.Simulation.__init__(eps_averaging)" }
+
+[[param]]
+name = "force_complex_fields"
+group = "numerics"
+affordance = "ratchet"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "enum", values = [false, true] }
+default = false
+doc = "Complex field arrays. Changes the dtype of every observation downstream."
+provenance = { grade = "E1", evidence = "signature", witness = "python:meep.Simulation.__init__(force_complex_fields)" }
+
+[[param]]
+name = "until"
+group = "run control"
+affordance = "dial"
+liveness = "perstep"
+grade = "imperative"
+domain = { kind = "continuous", lo = 5, hi = 2000, step = 5, dtype = "float" }
+default = 60
+precision = 3
+unit = "a/c"
+doc = "Run end time. Extending it mid-run is honoured: the callback breaks out and run() is re-entered."
+transition = "running -> running (extended)"
+provenance = { grade = "E4", evidence = "run", witness = "run:meep-extend-01" }
+
+[[param]]
+name = "stop"
+group = "run control"
+affordance = "trigger"
+liveness = "perstep"
+grade = "imperative"
+domain = { kind = "void" }
+confirm = true
+transition = "running -> stopped"
+doc = "Stop the run at the next step callback. The fields remain readable afterwards."
+provenance = { grade = "E4", evidence = "run", witness = "run:meep-stop-01" }
+
+[[param]]
+name = "stream_frames"
+group = "run control"
+affordance = "trigger"
+liveness = "perstep"
+grade = "imperative"
+domain = { kind = "void" }
+transition = "running -> running (frames on)"
+doc = "Turn on per-step reduced frames. Cheap (a 1/4-size abs field per callback) and reversible."
+provenance = { grade = "E4", evidence = "run", witness = "run:meep-stream-01" }
+
+[[param]]
+name = "dump_slice"
+group = "run control"
+affordance = "trigger"
+liveness = "perstep"
+grade = "imperative"
+domain = { kind = "void" }
+doc = "Write the current Ez slice to HDF5. On-demand observation made explicit as an action."
+provenance = { grade = "E4", evidence = "run", witness = "run:meep-dump-01" }
+
+# ---------------------------------------------------------------------------
+# Reads
+# ---------------------------------------------------------------------------
+
+[[observe]]
+name = "step"
+group = "progress"
+precision = 0
+shape = "scalar"
+pitch = "per-step"
+source = "stdout:SEAM"
+doc = "Yee timestep index, derived from meep_time()/dt."
+provenance = { grade = "E1", evidence = "source", witness = "python:meep.Simulation.dt" }
+
+[[observe]]
+name = "time"
+group = "progress"
+precision = 4
+shape = "scalar"
+pitch = "per-step"
+unit = "a/c"
+source = "stdout:SEAM"
+doc = "Meep time."
+provenance = { grade = "E1", evidence = "source", witness = "python:meep.Simulation.meep_time" }
+
+[[observe]]
+name = "ez_max"
+group = "field scalars"
+precision = 3
+shape = "scalar"
+pitch = "per-step"
+source = "stdout:SEAM"
+doc = "max|Ez| over the whole cell. An aggregate: cheap, always true, and not a substitute for the field."
+provenance = { grade = "E1", evidence = "source", witness = "python:meep.Simulation.get_array" }
+
+[[observe]]
+name = "ez_rms"
+group = "field scalars"
+precision = 3
+shape = "series"
+pitch = "per-step"
+source = "stdout:SEAM"
+doc = "RMS of Ez. The trace of this quantity is what shows the pulse leaving the cell."
+provenance = { grade = "E1", evidence = "source", witness = "python:meep.Simulation.get_array" }
+
+[[observe]]
+name = "ez_slice"
+group = "field"
+shape = "grid"
+pitch = "on-demand"
+dimensions = ["x", "y"]
+source = "file:slice.npy"
+preview = { max_width = 120, diverging = true }
+doc = "Ez on the full cell, on demand. The raw 160x160 Yee sample carries a grid-scale checkerboard mode; the preview box-averages to 120 and the mode cancels. Downsampling is a filter, not cosmetics."
+provenance = { grade = "E1", evidence = "source", witness = "python:meep.Simulation.get_array" }
+
+[[observe]]
+name = "ez_frame"
+group = "field"
+shape = "grid"
+pitch = "per-step"
+dimensions = ["x", "y"]
+source = "file:frame.npy"
+preview = { max_width = 120, diverging = false }
+doc = "Reduced |Ez| written by the callback while `stream_frames` is on. One preview per step; the array itself never crosses the seam."
+provenance = { grade = "E4", evidence = "run", witness = "run:meep-stream-01" }
+
+[[artifact]]
+name = "frame"
+path = "frame.npy"
+shape = "grid"
+pitch = "per-step"
+doc = "The live preview source. Overwritten in place, so its presence is a lifecycle fact while its content is not."
+provenance = { grade = "E1", evidence = "source", witness = "python:run_meep.py frame.npy" }
+
+[[artifact]]
+name = "slice"
+path = "slice.npy"
+shape = "grid"
+pitch = "on-demand"
+doc = "Produced by the dump_slice trigger; its presence is a lifecycle fact."
+provenance = { grade = "E1", evidence = "source", witness = "python:meep.Simulation.get_array" }
+
+[[notes]]
+name = "n_steps"
+reason = "Meep has no step-count parameter; until and dt are the real parameters. A dial named n_steps would be E3 fiction."
+witness = "python:meep.Simulation.__init__"

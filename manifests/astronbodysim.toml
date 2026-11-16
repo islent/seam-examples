@@ -1,0 +1,171 @@
+# Seam manifest — AstroNbodySim.jl (Julia immutable struct + callbacks)
+# Derivation: seam/mappings/astronbodysim.md
+
+[seam]
+version = "0.1"
+profile = "L2"
+
+[identity]
+name = "ans-plummer"
+adapter = "astronbodysim"
+domain = "stellar-dynamics"
+code = "AstroNbodySim.jl on Julia 1.13.3"
+entry = "julia:/opt/astro/AstroNbodySim.jl"
+description = "Plummer cluster under direct summation. The code already had a seam; the manifest only names it."
+
+[evidence]
+sources = [
+  "julia:src/base/Config.jl:1001 struct Simulation{D} — immutable, so fields are sealed by the language",
+  "julia:src/base/Config.jl:1053 Simulation(d; ...) kwargs — the parameter surface",
+  "julia:src/run.jl:154 for ps in sim.poststep; ps(sim) — the per-step channel, at E1",
+  "julia:src/base/Config.jl:814 TimeInfo{stepcount, system_time_float, scalefactor} — the observation ranks",
+]
+
+[cadence]
+poll = "2s"
+
+# ---------------------------------------------------------------------------
+# Writes — immutable struct: sealed, and the language enforces it (E1, not E4).
+# ---------------------------------------------------------------------------
+
+[[param]]
+name = "time_end"
+group = "integration"
+precision = 3
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 0.001, hi = 20, step = 0.001, dtype = "float" }
+default = 0.01
+unit = "Gyr"
+doc = "TimeEnd as a Unitful quantity. The struct is immutable, so this cannot change once constructed."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:Simulation(; TimeEnd)" }
+
+[[param]]
+name = "dt_step"
+group = "integration"
+precision = 1
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 1.0e-6, hi = 1.0e-3, log = true, dtype = "float" }
+default = 1.0e-5
+unit = "Gyr"
+doc = "TimeStep. Note that 0.0 is not a small step here, it selects the adaptive integrator: a distinct mode, modelled as its own ratchet in the runtime."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:Simulation(; TimeStep)" }
+
+[[param]]
+name = "dt_snap"
+group = "integration"
+precision = 4
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 1.0e-5, hi = 0.5, log = true, dtype = "float" }
+default = 1.0e-3
+unit = "Gyr"
+doc = "TimeBetweenSnapshots."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:Simulation(; TimeBetweenSnapshots)" }
+
+[[param]]
+name = "num_samples"
+group = "initial condition"
+precision = 0
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 50, hi = 5000, step = 50, dtype = "int" }
+default = 200
+doc = "Particle count in the Plummer initial condition. Passed to AstroIC, not to Simulation — still sealed, for the same reason."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:PlummerStarCluster(; NumSamples)" }
+
+[[param]]
+name = "total_mass"
+group = "initial condition"
+precision = 2
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 1.0e3, hi = 1.0e8, log = true, dtype = "float" }
+default = 1.0e5
+unit = "Msun"
+doc = "Total cluster mass."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:PlummerStarCluster(; TotalMass)" }
+
+[[param]]
+name = "virial_radius"
+group = "initial condition"
+precision = 3
+affordance = "dial"
+liveness = "sealed"
+grade = "imperative"
+domain = { kind = "continuous", lo = 0.001, hi = 1.0, step = 0.001, dtype = "float" }
+default = 0.01
+unit = "kpc"
+doc = "Plummer scale radius."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:PlummerStarCluster(; VirialRadius)" }
+
+[[param]]
+name = "snapshot"
+group = "run control"
+affordance = "trigger"
+liveness = "perstep"
+grade = "imperative"
+domain = { kind = "void" }
+doc = "Push an output request onto the post-step channel. Fires at the next step boundary, not immediately."
+provenance = { grade = "E1", evidence = "callback", witness = "julia:src/run.jl:154 poststep" }
+
+[[param]]
+name = "stop"
+group = "run control"
+affordance = "trigger"
+liveness = "perstep"
+grade = "imperative"
+domain = { kind = "void" }
+confirm = true
+transition = "running -> stopped"
+doc = "Raise out of the post-step callback. The run unwinds cleanly and the emitted summary says 'stopped', not 'finished'."
+provenance = { grade = "E1", evidence = "callback", witness = "julia:src/run.jl:154 poststep" }
+
+# ---------------------------------------------------------------------------
+# Reads — emitted from the post-step callback, so pitch really is per-step.
+# ---------------------------------------------------------------------------
+
+[[observe]]
+name = "step"
+group = "progress"
+precision = 0
+shape = "scalar"
+pitch = "per-step"
+source = "stdout:SEAM"
+doc = "timeinfo.stepcount, read in the post-step callback."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:TimeInfo.stepcount" }
+
+[[observe]]
+name = "time"
+group = "progress"
+precision = 5
+shape = "scalar"
+pitch = "per-step"
+unit = "Gyr"
+source = "stdout:SEAM"
+doc = "timeinfo.system_time_float, in simulation time units."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:TimeInfo.system_time_float" }
+
+[[observe]]
+name = "scale_factor"
+group = "progress"
+precision = 2
+shape = "series"
+pitch = "per-step"
+source = "stdout:SEAM"
+doc = "timeinfo.scalefactor. Constant for a non-cosmological run, which is itself worth seeing."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:TimeInfo.scalefactor" }
+
+[[artifact]]
+name = "snapshot_dir"
+path = "output"
+shape = "table"
+pitch = "per-step"
+doc = "Snapshot directory. A directory rather than a file: the artifacts primitive accepts both, and this code writes one directory."
+provenance = { grade = "E1", evidence = "struct", witness = "julia:Simulation(; OutputDir)" }

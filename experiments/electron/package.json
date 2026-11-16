@@ -1,0 +1,14 @@
+{
+  "name": "seam-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron host for the Seam surface — proves the binding is replaceable",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "selftest": "node selftest.js"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}

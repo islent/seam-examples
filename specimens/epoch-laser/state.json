@@ -1,0 +1,18 @@
+{
+  "run_id": "epoch-laser",
+  "identity": {
+    "name": "epoch-laser-3d",
+    "adapter": "epoch",
+    "domain": "plasma",
+    "code": "EPOCH3D (unknown build hash)",
+    "entry": "cli:/opt/epoch/epoch3d/bin/epoch3d",
+    "description": "3D underdense plasma with an open box. Everything is sealed: the deck is read once."
+  },
+  "records": 907,
+  "final": {
+    "iteration": 13119,
+    "time": 6e-12,
+    "snapshot_index": 300
+  },
+  "interventions": []
+}

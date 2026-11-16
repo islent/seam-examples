@@ -1,0 +1,73 @@
+# A tutorial that can fail. Run it live, or replay it against a specimen.
+#
+#   seam scenario scenarios/meep-first-pulse.toml --host user@hpc-node
+#   seam scenario scenarios/meep-first-pulse.toml --specimen specimens/meep-first-pulse
+#
+# The point of the exercise is step 3: try to move `resolution` mid-run and watch the seam
+# refuse. That refusal is the difference between this surface and a form.
+
+[scenario]
+name = "meep-first-pulse"
+manifest = "../manifests/meep.toml"
+requires = ">=0.1"
+
+[[step]]
+id = "read-this"
+kind = "note"
+note = "The parameter set is already sealed: the deck was written before the job started. Watch what is still live."
+
+[[step]]
+id = "pulse-starts"
+kind = "expect"
+point = "time"
+op = "ge"
+value = 5
+timeout = "90s"
+
+[[step]]
+id = "extend-the-run"
+kind = "intervene"
+point = "until"
+value = 240
+expect = "accepted"
+
+[[step]]
+id = "still-running"
+kind = "expect"
+point = "time"
+op = "ge"
+value = 60
+timeout = "120s"
+
+[[step]]
+id = "try-to-seal-cheat"
+kind = "intervene"
+point = "resolution"
+value = 60
+expect = "rejected"
+
+[[step]]
+id = "note-on-rejection"
+kind = "note"
+note = "Rejected, and the rejection is in the trace. A surface that accepted this write would have left you believing the grid had changed."
+
+[[step]]
+id = "dump-a-slice"
+kind = "intervene"
+point = "dump_slice"
+value = true
+expect = "accepted"
+
+[[step]]
+id = "slice-exists"
+kind = "expect"
+point = "ez_rms"
+op = "exists"
+timeout = "60s"
+
+[[step]]
+id = "stop-it"
+kind = "intervene"
+point = "stop"
+value = true
+expect = "accepted"

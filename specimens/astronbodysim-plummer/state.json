@@ -1,0 +1,18 @@
+{
+  "run_id": "astronbodysim-plummer",
+  "identity": {
+    "name": "ans-plummer",
+    "adapter": "astronbodysim",
+    "domain": "stellar-dynamics",
+    "code": "AstroNbodySim.jl on Julia 1.13.3",
+    "entry": "julia:/opt/astro/AstroNbodySim.jl",
+    "description": "Plummer cluster under direct summation. The code already had a seam; the manifest only names it."
+  },
+  "records": 303,
+  "final": {
+    "step": 100,
+    "time": 0.002000000000000004,
+    "scale_factor": 1.0
+  },
+  "interventions": []
+}

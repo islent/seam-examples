@@ -1,0 +1,3 @@
+# The binding's dependencies. The core (src/seam) has none, on purpose: a specification whose
+# reference implementation needs a 200 MB stack is a specification nobody checks.
+imgui-bundle>=1.6

@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seam surface</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --line: #e4e4e2; --line-strong: #cfcfcc;
+    --ink: #1e1e1c; --muted: #6b6b66; --faint: #9a9a94;
+    --accent: #2f6fd0; --accent-soft: #eaf1fc;
+    --warn: #b45309; --warn-soft: #fdf3e3;
+    --bad: #b3261e; --bad-soft: #fbeceb;
+    --ok: #1f7a4d; --ok-soft: #e8f4ee;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 -apple-system, "Segoe UI", "Helvetica Neue", "PingFang SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    padding: 14px 20px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 14px; font-weight: 650; margin: 0; letter-spacing: .01em; }
+  header .sub { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .spacer { flex: 1; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    font-size: 11px; font-family: var(--mono); color: var(--muted); white-space: nowrap;
+  }
+  .badge.sealed { background: #f4f4f2; }
+  .badge.perstep { background: var(--warn-soft); border-color: #e8d3ac; color: var(--warn); }
+  .badge.midrun { background: var(--ok-soft); border-color: #bfdccb; color: var(--ok); }
+  .badge.unres { background: var(--bad-soft); border-color: #eec8c5; color: var(--bad); }
+  nav { display: flex; gap: 2px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  nav button {
+    appearance: none; background: none; border: 0; border-bottom: 2px solid transparent;
+    padding: 9px 12px; font: inherit; font-size: 12.5px; color: var(--muted); cursor: pointer;
+  }
+  nav button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 550; }
+  main { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.15fr); gap: 0; }
+  section { padding: 16px 20px 48px; }
+  section + section { border-left: 1px solid var(--line); }
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint);
+    font-weight: 600; margin: 0 0 10px;
+  }
+  .ctl {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  .ctl.dead { opacity: .62; background: #fcfcfb; }
+  .ctl .top { display: flex; align-items: center; gap: 8px; }
+  .ctl .nm { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+  .ctl .unit { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+  .ctl .doc { color: var(--muted); font-size: 12px; margin-top: 5px; }
+  .ctl .row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .ctl .prov { margin-top: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .val { font-family: var(--mono); font-size: 12px; min-width: 62px; text-align: right; }
+  input[type=number], select {
+    font: inherit; font-family: var(--mono); font-size: 12px; padding: 3px 6px;
+    border: 1px solid var(--line-strong); border-radius: 5px; background: #fff; color: var(--ink);
+  }
+  button.fire {
+    font: inherit; font-size: 12px; padding: 4px 12px; border-radius: 5px; cursor: pointer;
+    border: 1px solid var(--line-strong); background: #fff; color: var(--ink);
+  }
+  button.fire:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button.fire:disabled { cursor: not-allowed; color: var(--faint); background: #fafafa; }
+  .gauge { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .gauge .top { display: flex; align-items: baseline; gap: 8px; }
+  .gauge .nm { font-family: var(--mono); font-size: 12px; }
+  .gauge canvas { width: 100%; height: 58px; display: block; margin-top: 6px; }
+  .big { font-family: var(--mono); font-size: 21px; font-variant-numeric: tabular-nums; }
+  .trace { font-family: var(--mono); font-size: 11px; color: var(--muted); max-height: 240px; overflow: auto; }
+  .trace div { padding: 1px 0; border-bottom: 1px dotted #eee; white-space: nowrap; }
+  .trace .k-observe { color: var(--faint); }
+  .trace .k-intervene { color: var(--accent); }
+  .trace .k-dissent { color: var(--bad); }
+  .trace .k-seal, .trace .k-transition { color: var(--ok); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); font-weight: 600; }
+  td.mono, .mono { font-family: var(--mono); }
+  tr.sel { background: var(--accent-soft); }
+  .note { background: var(--accent-soft); border: 1px solid #d3e2f8; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #294a7d; }
+  .warn { background: var(--warn-soft); border: 1px solid #eddcc0; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #7a4a08; }
+  .err { background: var(--bad-soft); border: 1px solid #eec8c5; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #8a1f18; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .step.cur { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .step.done { opacity: .55; }
+  .step .id { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  .step .body { margin-top: 3px; }
+  .kv { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  pre { font-family: var(--mono); font-size: 11px; background: #f7f7f5; border: 1px solid var(--line);
+        border-radius: 6px; padding: 8px 10px; overflow: auto; margin: 6px 0 0; }
+  .muted { color: var(--muted); }
+  .tiny { font-size: 11px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-name">Seam surface</h1>
+  <span class="sub" id="h-code"></span>
+  <span class="spacer"></span>
+  <span class="badge" id="h-transport">connecting</span>
+  <span class="badge" id="h-mode">mode</span>
+  <span class="badge" id="h-status">status</span>
+  <span class="badge" id="h-profile">profile</span>
+</header>
+<nav id="tabs"></nav>
+
+<main>
+  <section id="left"></section>
+  <section id="right"></section>
+</main>
+
+<script>
+"use strict";
+
+// The same file is served by the seam process (browser) and loaded from disk by the Electron
+// shell. Everything below therefore speaks to window.SEAM_BASE, which is "" in a browser.
+const BASE = (typeof window !== "undefined" && window.SEAM_BASE) || "";
+
+const S = {
+  man: null,         // manifest payload
+  transportMode: "connecting",   // streaming | polling
+  frame: { point: null, url: null, meta: null, error: null },
+  state: null,       // runtime state
+  tab: "run",
+  scenario: null,
+  stepIndex: 0,
+  selected: null,    // bench selection
+  draft: null,       // bench draft of the selected point
+  specimen: null,
+  selectedMarker: null,
+  err: null,
+};
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined && text !== null) n.textContent = text;
+  return n;
+};
+// ---------------------------------------------------------------------------
+// Formatting and grouping are NOT binding decisions (SPEC 4.7). This mirrors
+// seam.client.format_value and seam.client.group_points; tests/test_bindings.py compares the two
+// implementations on the same inputs, because two renderings of one sample are two numbers.
+// ---------------------------------------------------------------------------
+const DEFAULT_PRECISION = 4;
+
+function fmtValue(v, precision) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "string") return v;
+  if (typeof v !== "number" || !isFinite(v)) return String(v);
+
+  const p = (precision === null || precision === undefined) ? DEFAULT_PRECISION : precision;
+  if (p === 0) return String(Math.round(v));
+  if (v === 0) return "0";
+
+  // Numeric, not type-based: JSON erases the difference between 200 and 200.0 before any
+  // binding sees it, so the rule must not depend on it (SPEC 4.7).
+  if (Number.isInteger(v) && Math.abs(v) < 1e18) {
+    const digits = String(Math.abs(v)).length;
+    if (digits <= p) return String(v);
+  }
+
+  const mag = Math.floor(Math.log10(Math.abs(v)));
+  if (mag >= p || mag < -2) {
+    const [m, e] = v.toExponential(Math.max(0, p - 1)).split("e");
+    return m + "e" + String(parseInt(e, 10));
+  }
+  const decimals = Math.max(0, p - 1 - mag);
+  if (decimals === 0) return v.toFixed(0);
+  return v.toFixed(decimals).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function fmtWithUnit(point, value) {
+  const t = fmtValue(value, point && point.precision);
+  const u = point && point.unit;
+  return u ? t + " " + u : t;
+}
+
+function groupPoints(controls) {
+  const order = [], buckets = new Map();
+  for (const c of controls) {
+    const g = c.group || "";
+    if (!buckets.has(g)) { buckets.set(g, []); order.push(g); }
+    buckets.get(g).push(c);
+  }
+  // first-appearance order (manifest order is presentation order); ungrouped last
+  order.sort((a, b) => (a === "" ? 1 : 0) - (b === "" ? 1 : 0));
+  return order.map(g => [g, buckets.get(g)]);
+}
+
+const fmt = (v) => {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "number") {
+    if (Number.isInteger(v)) return String(v);
+    if (Math.abs(v) !== 0 && (Math.abs(v) < 1e-3 || Math.abs(v) >= 1e5)) return v.toExponential(3);
+    return v.toPrecision(5);
+  }
+  if (typeof v === "boolean") return v ? "true" : "false";
+  return String(v);
+};
+
+async function get(path) {
+  const r = await fetch(BASE + path);
+  if (!r.ok) throw new Error(path + " -> " + r.status);
+  return r.json();
+}
+async function post(path, body) {
+  const r = await fetch(BASE + path, { method: "POST",
+                                       headers: { "Content-Type": "application/json" },
+                                       body: JSON.stringify(body || {}) });
+  return r.json();
+}
+
+// ---------------------------------------------------------------- badges
+function liveBadge(live) {
+  const b = el("span", "badge " + (live || "sealed"), live || "sealed");
+  return b;
+}
+function provBadge(p) {
+  const b = el("span", "badge" + (p.assumed ? " perstep" : ""), p.grade + (p.assumed ? " assumed" : ""));
+  b.title = (p.evidence || "") + " @ " + p.witness;
+  return b;
+}
+
+// ---------------------------------------------------------------- tabs
+const TABS = [
+  { id: "run", label: "Surface" },
+  { id: "field", label: "Field" },
+  { id: "tutorial", label: "Tutorial" },
+  { id: "bench", label: "Bench" },
+  { id: "specimen", label: "Specimen" },
+];
+function renderTabs() {
+  const nav = $("tabs");
+  nav.innerHTML = "";
+  const allowed = S.man.mode === "specimen" ? ["specimen", "bench"] : TABS.map(t => t.id);
+  TABS.filter(t => allowed.includes(t.id)).forEach(t => {
+    const b = el("button", S.tab === t.id ? "on" : "", t.label);
+    b.onclick = () => { S.tab = t.id; renderTabs(); render(); };
+    nav.appendChild(b);
+  });
+}
+
+// ---------------------------------------------------------------- main render
+function render() {
+  if (!S.man) return;
+  $("h-name").textContent = S.man.manifest.identity.name || "seam";
+  $("h-code").textContent = S.man.manifest.identity.code || "";
+  $("h-mode").textContent = S.man.mode;
+  $("h-profile").textContent = (S.man.manifest.seam && S.man.manifest.seam.profile) || "—";
+  const st = S.state || {};
+  $("h-status").textContent = st.status || "—";
+
+  const left = $("left"), right = $("right");
+  left.innerHTML = ""; right.innerHTML = "";
+
+  if (S.tab === "run") { renderControls(left, false); renderGauges(right); }
+  else if (S.tab === "field") { renderField(left, right); }
+  else if (S.tab === "tutorial") { renderTutorial(left, right); }
+  else if (S.tab === "bench") { renderBench(left, right); }
+  else { renderSpecimen(left, right); }
+}
+
+// ---------------------------------------------------------------- controls
+function renderControls(root, readOnly) {
+  const sealedNow = (S.state && S.state.status &&
+                     !["created", "sealed"].includes(S.state.status));
+  const items = (S.man.human || []).filter(c => c.role === "intervention");
+  const groups = groupPoints(items);
+  for (const [group, members] of groups) {
+    root.appendChild(el("h2", null, group || "interventions"));
+    for (const c of members) root.appendChild(controlCard(c, readOnly, sealedNow));
+  }
+}
+
+function controlCard(c, readOnly, sealedNow) {
+  {
+    const card = el("div", "ctl" + (c.disabled ? " dead" : ""));
+    const top = el("div", "top");
+    top.appendChild(el("span", "nm", c.name));
+    if (c.unit) top.appendChild(el("span", "unit", c.unit));
+    top.appendChild(el("span", "spacer"));
+    top.appendChild(liveBadge(c.affordance === "unresolved" ? "unres" : c.liveness));
+    card.appendChild(top);
+
+    if (c.doc) card.appendChild(el("div", "doc", c.doc));
+
+    const row = el("div", "row");
+    const disabled = readOnly || c.disabled;
+
+    if (c.affordance === "dial") {
+      const d = c.domain || {};
+      // Slider travel is 0..1000 in *position* space, and the position→value mapping is
+      // normative (SPEC 4.7): linear normally, geometric when the domain is log. Otherwise a
+      // log dial means one thing here and another in the terminal.
+      const lo = Number(d.lo), hi = Number(d.hi);
+      const posOf = (v) => d.log
+        ? Math.log(Math.min(hi, Math.max(lo, v)) / lo) / Math.log(hi / lo)
+        : (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo || 1);
+      const valOf = (t) => d.log ? lo * Math.pow(hi / lo, t) : lo + (hi - lo) * t;
+      const snap = (v) => {
+        if (d.dtype === "int") return Math.round(v);
+        if (d.step) return Math.round(v / d.step) * d.step;
+        return v;
+      };
+      const range = el("input");
+      range.type = "range";
+      range.min = 0; range.max = 1000; range.step = 1;
+      range.value = Math.round(posOf(Number(c.value ?? lo)) * 1000);
+      range.disabled = disabled;
+      const out = el("span", "val", fmtWithUnit(c, c.value));
+      range.oninput = () => { out.textContent = fmtWithUnit(c, snap(valOf(range.value / 1000))); };
+      // commit on release: one crossing per adjustment, not one per pixel (SPEC 4.7)
+      range.onchange = async () => {
+        await sendIntervention(c.name, snap(valOf(range.value / 1000)));
+      };
+      row.appendChild(range); row.appendChild(out);
+    } else if (c.affordance === "ratchet") {
+      const sel = el("select");
+      (c.domain && c.domain.values || []).forEach(v => {
+        const o = el("option", null, fmt(v)); o.value = String(v);
+        if (String(v) === String(c.value)) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.disabled = disabled;
+      sel.onchange = async () => {
+        let v = sel.value;
+        if (v === "true") v = true; else if (v === "false") v = false;
+        else if (!isNaN(Number(v)) && v.trim() !== "") v = Number(v);
+        await sendIntervention(c.name, v);
+      };
+      row.appendChild(sel);
+    } else if (c.affordance === "trigger") {
+      const armed = S.armed && S.armed.has(c.name);
+      const b = el("button", "fire", armed ? "Confirm  " + c.name : "Fire  " + c.name);
+      if (armed) { b.style.borderColor = "var(--bad)"; b.style.color = "var(--bad)"; }
+      b.disabled = disabled;
+      b.onclick = async () => {
+        if (c.confirm && !(S.armed && S.armed.has(c.name))) {
+          S.armed = (S.armed || new Set()).add(c.name);
+          render();
+          flash(`${c.name} is destructive — click again to fire`, "warn");
+          return;
+        }
+        if (S.armed) S.armed.delete(c.name);
+        await sendIntervention(c.name, true);
+      };
+      row.appendChild(b);
+    } else {
+      card.appendChild(el("div", "doc", "Unresolved: no affordance could be settled, so no control is bound. This is a question for the code's author, not a UI gap."));
+      row.appendChild(el("span", "mono tiny muted", "value: " + fmt(c.value)));
+    }
+    if (row.childNodes.length) card.appendChild(row);
+
+    if (c.grade) card.appendChild(el("div", "prov", "grade=" + c.grade + (sealedNow && c.liveness === "sealed" ? "  ·  sealed at submission" : "")));
+    if (c.provenance) card.appendChild(el("div", "prov",
+      "provenance " + c.provenance.grade + " · " + (c.provenance.evidence || "") + " · " + (c.provenance.witness || "")));
+    return card;
+  }
+}
+
+async function sendIntervention(point, value) {
+  const r = await post("/api/intervene", { point, value });
+  if (r && r.outcome && r.outcome !== "accepted") {
+    flash(r.outcome === "rejected" ? ("rejected: " + (r.note || "")) : r.outcome,
+          r.outcome === "rejected" ? "err" : "warn");
+  }
+  await refresh();
+}
+
+function flash(msg, cls) {
+  const right = $("right");
+  const n = el("div", cls || "note", msg);
+  n.style.marginBottom = "8px";
+  right.prepend(n);
+  setTimeout(() => n.remove(), 6000);
+}
+
+// ---------------------------------------------------------------- gauges
+function renderGauges(root) {
+  const series = (S.state && S.state.series) || {};
+  const obs = (S.man.human || []).filter(c => c.role === "observation");
+  for (const [group, members] of groupPoints(obs)) {
+    root.appendChild(el("h2", null, group || "observations"));
+    for (const o of members) root.appendChild(gaugeCard(o, series));
+  }
+  renderTail(root);
+}
+
+function gaugeCard(o, series) {
+  {
+    const card = el("div", "gauge");
+    const top = el("div", "top");
+    top.appendChild(el("span", "nm", o.name));
+    if (o.unit) top.appendChild(el("span", "unit", o.unit));
+    top.appendChild(el("span", "spacer"));
+    top.appendChild(el("span", "badge", o.pitch));
+    card.appendChild(top);
+
+    const vals = series[o.name] || [];
+    if (o.shape === "scalar" || o.shape === "readout") {
+      card.appendChild(el("div", "big",
+        fmtWithUnit(o, (S.state && S.state.values || {})[o.name])));
+    } else if (o.shape === "grid") {
+      const g = (S.man.human || []).find(x => x.name === o.name) || {};
+      const img = el("img");
+      img.alt = o.name;
+      img.style.width = "100%";
+      img.style.imageRendering = "auto";
+      img.style.borderRadius = "4px";
+      img.src = BASE + "/api/frame?point=" + encodeURIComponent(o.name) +
+                "&w=" + ((g.preview && g.preview.max_width) || 120) +
+                "&t=" + ((S.state && S.state.records) ? S.state.records.length : 0);
+      img.onerror = () => {
+        img.remove();
+        card.appendChild(el("div", "muted tiny",
+          "no preview yet — the producer has not written one. Fire `dump_slice` or `stream_frames`."));
+      };
+      card.appendChild(img);
+    } else if (vals.length) {
+      const cv = el("canvas");
+      card.appendChild(cv);
+      requestAnimationFrame(() => drawLine(cv, vals));
+    } else {
+      card.appendChild(el("div", "muted tiny", o.shape === "grid"
+        ? "grid: fetched on demand, never streamed"
+        : "no samples yet"));
+    }
+    if (o.doc) card.appendChild(el("div", "doc", o.doc));
+    return card;
+  }
+}
+
+function renderTail(root) {
+  const tail = el("div");
+  tail.appendChild(el("h2", null, "Trace tail"));
+  const box = el("div", "trace");
+  ((S.state && S.state.records) || []).slice(-40).reverse().forEach(r => {
+    box.appendChild(el("div", "k-" + r.kind,
+      `${r.seq} ${r.kind.padEnd(10)} ${(r.point || "").padEnd(18)} ${r.outcome}` +
+      (r.note ? "  · " + r.note : "")));
+  });
+  if (!box.childNodes.length) box.appendChild(el("div", "muted", "no records"));
+  tail.appendChild(box);
+  root.appendChild(tail);
+}
+
+function drawLine(canvas, vals) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const g = canvas.getContext("2d");
+  g.scale(dpr, dpr);
+  const nums = vals.filter(v => typeof v === "number");
+  if (nums.length < 2) return;
+  let lo = Math.min(...nums), hi = Math.max(...nums);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = 3;
+  g.strokeStyle = "#2f6fd0"; g.lineWidth = 1.3; g.beginPath();
+  nums.forEach((v, i) => {
+    const x = pad + (i / (nums.length - 1)) * (w - 2 * pad);
+    const y = h - pad - ((v - lo) / (hi - lo)) * (h - 2 * pad);
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  });
+  g.stroke();
+  g.fillStyle = "#a8a8a2"; g.font = "9px ui-monospace, monospace";
+  g.textAlign = "right";
+  g.fillText(fmtValue(hi), w - 2, 9);
+  g.fillText(fmtValue(lo), w - 2, h - 2);
+  g.textAlign = "left";
+}
+
+// ---------------------------------------------------------------- field
+function renderField(left, right) {
+  const grids = (S.state && S.state.controls || [])
+    .filter(c => c.role === "observation" && c.shape === "grid");
+  left.appendChild(el("h2", null, "Grid observations"));
+  if (!grids.length) {
+    left.appendChild(el("div", "note",
+      "This manifest declares no grid observation. Nothing to render — and that is a fact about " +
+      "the code, not about the viewer: no SDF or HDF5 reader is shipped, so EPOCH and Gadget-2 " +
+      "snapshots are declared as artifacts and stay unrendered."));
+    return;
+  }
+  // Prefer a grid point that is produced at a live pitch: an on-demand artifact may simply
+  // not exist yet, and defaulting to one produces an empty viewer on first load.
+  const ordered = grids.slice().sort((a, b) =>
+    (a.pitch === "on-demand" ? 1 : 0) - (b.pitch === "on-demand" ? 1 : 0));
+  if (!S.frame.point || !grids.some(g => g.name === S.frame.point)) {
+    S.frame.point = ordered[0].name;
+    S.frame.tried = [];
+  }
+
+  const pick = el("select");
+  grids.forEach(g => {
+    const o = el("option", null, g.name); o.value = g.name;
+    if (g.name === S.frame.point) o.selected = true;
+    pick.appendChild(o);
+  });
+  pick.onchange = () => { S.frame.point = pick.value; render(); };
+  left.appendChild(pick);
+
+  const g0 = grids.find(g => g.name === S.frame.point) || {};
+  const pw = (g0.preview && g0.preview.max_width) || 120;
+  left.appendChild(el("div", "prov", "pitch=" + g0.pitch + "  ·  preview max_width=" + pw +
+    "  ·  " + (g0.preview && g0.preview.diverging ? "diverging colour" : "sequential colour")));
+  left.appendChild(el("div", "doc tiny muted",
+    "What crosses the seam is a reduced frame, never the array (SPEC 4.6). Downsampling is a " +
+    "filter, not cosmetics: a raw Yee sample carries a grid-scale checkerboard mode that box " +
+    "averaging removes."));
+
+  const token = (S.state && S.state.records) ? S.state.records.length : 0;
+  let img_failed = false;
+  const big = el("img");
+  big.style.display = "block";
+  big.style.margin = "0 auto";
+  big.style.borderRadius = "4px";
+  big.style.background = "#fff";
+  big.src = BASE + "/api/frame?point=" + encodeURIComponent(S.frame.point) + "&w=" + pw + "&t=" + token;
+  big.onload = () => {
+    // Display at a modest integer multiple of the preview's own size. Upscaling for display is
+    // unavoidable in any binding; *reducing* is what a consumer must not do (SPEC 4.6).
+    const nat = big.naturalWidth || pw;
+    const k = Math.min(6, Math.max(1, Math.floor(560 / nat)));
+    big.style.width = (nat * k) + "px";
+    big.style.maxWidth = "100%";
+  };
+  big.onerror = () => {
+    img_failed = true;
+    S.frame.tried = (S.frame.tried || []).concat([S.frame.point]);
+    const next = ordered.find(g => !S.frame.tried.includes(g.name));
+    if (next) {
+      // A viewer must not dead-end on the first declared point. Try the next one, then stop.
+      S.frame.point = next.name;
+      S.frame.tried = [];
+      render();
+      return;
+    }
+    // Nothing renders: say which points were tried and what would produce one.
+    const warn = el("div", "warn");
+    warn.appendChild(el("div", null, "No frame crossed the seam for: " + S.frame.tried.join(", ")));
+    warn.appendChild(el("div", "tiny",
+      "A grid observation at a live pitch must be produced before it can be previewed " +
+      "(SPEC 4.6). On Meep: fire `stream_frames` for per-step reduced frames, or `dump_slice` " +
+      "for the full slice. EPOCH and Gadget-2 have no preview path at all — their snapshots " +
+      "are declared as artifacts and need an SDF/HDF5 reader."));
+    right.appendChild(warn);
+  };
+
+  right.appendChild(el("h2", null, S.frame.point));
+  right.appendChild(big);
+  right.appendChild(el("div", "tiny muted",
+    "Refreshed on every crossing batch, at the declared preview width (" + pw + " px), upscaled " +
+    "for display only. The colour normalisation is recomputed per frame, so a fading field will " +
+    "look constant — watch the numeric gauges for absolute scale."));
+  renderGauges(right);
+}
+
+// ---------------------------------------------------------------- tutorial
+function renderTutorial(left, right) {
+  const list = (S.man.scenarios || []);
+  left.appendChild(el("h2", null, "Scenarios"));
+  if (!list.length) {
+    left.appendChild(el("div", "note", "No scenarios found for this manifest. A tutorial in Seam is an executable scenario (modes/scenario.md), so a prose tutorial would not appear here."));
+    return;
+  }
+  const pick = el("select");
+  list.forEach(s => { const o = el("option", null, s.name); o.value = s.name; pick.appendChild(o); });
+  pick.onchange = () => { loadScenario(pick.value); };
+  left.appendChild(pick);
+
+  const sc = S.scenario;
+  if (!sc) { loadScenario(list[0].name); return; }
+
+  const box = el("div");
+  box.style.marginTop = "12px";
+  sc.steps.forEach((st, i) => {
+    const card = el("div", "step" + (i === S.stepIndex ? " cur" : i < S.stepIndex ? " done" : ""));
+    card.appendChild(el("div", "id", `${i + 1}/${sc.steps.length} · ${st.kind} · ${st.id}`));
+    const body = el("div", "body");
+    if (st.kind === "note") body.appendChild(el("div", null, st.note || ""));
+    else if (st.kind === "intervene")
+      body.appendChild(el("div", "mono tiny", `${st.point} = ${JSON.stringify(st.value)}  (expect ${st.expect || "accepted"})`));
+    else
+      body.appendChild(el("div", "mono tiny", `${st.point} ${st.op} ${JSON.stringify(st.value)}`));
+    card.appendChild(body);
+
+    if (i === S.stepIndex && st.kind === "intervene") {
+      const kv = el("div", "kv");
+      const b = el("button", "fire", "Apply this step");
+      b.onclick = async () => {
+        const r = await post("/api/intervene", { point: st.point, value: st.value });
+        const want = st.expect || "accepted";
+        if (r.outcome === want) { S.stepIndex++; await refresh(); }
+        else flash(`expected ${want}, got ${r.outcome}: ${r.note || ""}`, "err");
+      };
+      b.disabled = S.man.mode === "specimen";
+      kv.appendChild(b);
+      card.appendChild(kv);
+    }
+    box.appendChild(card);
+  });
+  left.appendChild(box);
+
+  const st = sc.steps[S.stepIndex];
+  right.appendChild(el("h2", null, "Current step"));
+  if (!st) {
+    right.appendChild(el("div", "note", "Scenario complete."));
+    return;
+  }
+  const card = el("div", "step cur");
+  card.appendChild(el("div", "id", st.id));
+  if (st.kind === "expect" || st.kind === "assert") {
+    const cur = (S.state && S.state.values && S.state.values[st.point]);
+    const ok = evalPred(st.op, cur, st.value, st.tolerance);
+    card.appendChild(el("div", "body mono",
+      `${st.point} = ${fmt(cur)}   need ${st.op} ${fmt(st.value)}   ${ok ? "satisfied" : "waiting"}`));
+    const kv = el("div", "kv");
+    const b = el("button", "fire", "Re-check");
+    b.onclick = async () => {
+      await refresh();
+      const c2 = (S.state && S.state.values && S.state.values[st.point]);
+      if (evalPred(st.op, c2, st.value, st.tolerance)) { S.stepIndex++; render(); }
+      else flash("not yet: " + st.point + " = " + fmt(c2), "warn");
+    };
+    kv.appendChild(b);
+    card.appendChild(kv);
+  } else if (st.kind === "intervene") {
+    card.appendChild(el("div", "body mono", `waiting for you to apply ${st.point} = ${JSON.stringify(st.value)}`));
+  } else {
+    card.appendChild(el("div", "body", st.note || "prose step"));
+    const kv = el("div", "kv");
+    const b = el("button", "fire", "Continue");
+    b.onclick = () => { S.stepIndex++; render(); };
+    kv.appendChild(b); card.appendChild(kv);
+  }
+  right.appendChild(card);
+  renderGauges(right);
+}
+
+function evalPred(op, v, t, tol) {
+  if (op === "exists") return v !== null && v !== undefined;
+  if (v === null || v === undefined) return false;
+  switch (op) {
+    case "lt": return v < t;
+    case "le": return v <= t;
+    case "eq": return v === t;
+    case "ne": return v !== t;
+    case "ge": return v >= t;
+    case "gt": return v > t;
+    case "within_rel": return Math.abs(v - t) <= Math.abs(t) * (tol || 0.05);
+    case "within_abs": return Math.abs(v - t) <= (tol || 0);
+    case "changes_by": return Math.abs(v) >= Math.abs(t);
+    default: return false;
+  }
+}
+
+async function loadScenario(name) {
+  S.scenario = await get("/api/scenario?name=" + encodeURIComponent(name));
+  S.stepIndex = 0;
+  render();
+}
+
+// ---------------------------------------------------------------- bench
+function renderBench(left, right) {
+  left.appendChild(el("h2", null, "Derivation"));
+  const tbl = el("table");
+  const head = el("tr");
+  ["point", "affordance", "liveness", "evidence", "witness"].forEach(h => head.appendChild(el("th", null, h)));
+  tbl.appendChild(head);
+  (S.man.human || []).filter(c => c.role === "intervention").forEach(c => {
+    const tr = el("tr", c.name === S.selected ? "sel" : "");
+    tr.style.cursor = "pointer";
+    tr.onclick = () => { S.selected = c.name; S.draft = JSON.parse(JSON.stringify(c)); render(); };
+    tr.appendChild(el("td", "mono", c.name));
+    tr.appendChild(el("td", "mono" + (c.affordance === "unresolved" ? " muted" : ""), c.affordance));
+    tr.appendChild(el("td", "mono", c.liveness || "—"));
+    tr.appendChild(el("td", "mono", (c.provenance && c.provenance.grade) || ""));
+    tr.appendChild(el("td", "mono tiny muted", (c.provenance && c.provenance.witness) || ""));
+    tbl.appendChild(tr);
+  });
+  left.appendChild(tbl);
+
+  if (S.man.summary && S.man.summary.assumed && S.man.summary.assumed.length) {
+    left.appendChild(el("div", "warn", "Assumed liveness: " + S.man.summary.assumed.join(", ") +
+      " — declared at E0 or as an assumption, not demonstrated. The bench shows this rather than hiding it."));
+  }
+
+  right.appendChild(el("h2", null, "Edit"));
+  if (!S.selected) {
+    right.appendChild(el("div", "note", "Select a point. Editing re-derives the affordance and shows what the agent projection would expose — that is what the bench is for."));
+    renderAgent(right);
+    return;
+  }
+  const d = S.draft;
+  const card = el("div", "ctl");
+  card.appendChild(el("div", "top", null)).appendChild(el("span", "nm", d.name));
+  const aff = el("select");
+  ["dial", "ratchet", "trigger", "unresolved"].forEach(a => {
+    const o = el("option", null, a); o.value = a; if (a === d.affordance) o.selected = true; aff.appendChild(o);
+  });
+  aff.onchange = () => { d.affordance = aff.value; };
+  card.appendChild(labelled("affordance", aff));
+
+  const liv = el("select");
+  ["sealed", "perstep", "midrun"].forEach(a => {
+    const o = el("option", null, a); o.value = a; if (a === d.liveness) o.selected = true; liv.appendChild(o);
+  });
+  liv.onchange = () => { d.liveness = liv.value; };
+  card.appendChild(labelled("liveness", liv));
+
+  if (d.domain && d.domain.kind === "continuous") {
+    ["lo", "hi", "step"].forEach(k => {
+      const n = el("input"); n.type = "number"; n.step = "any"; n.value = d.domain[k] ?? "";
+      n.style.width = "90px";
+      n.onchange = () => { d.domain[k] = n.value === "" ? undefined : Number(n.value); };
+      card.appendChild(labelled(k, n));
+    });
+  }
+  if (d.domain && d.domain.kind === "enum") {
+    const n = el("input"); n.type = "text"; n.value = (d.domain.values || []).join(", ");
+    n.style.width = "100%";
+    n.onchange = () => { d.domain.values = n.value.split(",").map(s => s.trim()).filter(Boolean); };
+    card.appendChild(labelled("values", n));
+  }
+  const kv = el("div", "kv");
+  const go = el("button", "fire", "Re-derive");
+  go.onclick = async () => {
+    const r = await post("/api/bench", { point: d.name, patch: {
+      affordance: d.affordance, liveness: d.liveness, domain: d.domain } });
+    if (!r.ok) { flash(r.error, "err"); return; }
+    if (r.diff && r.diff.length) flash("projection divergence: " + r.diff.join("; "), "err");
+    else flash("re-derived: no divergence between projections", "note");
+    if (r.agent) S.agentPreview = r.agent;
+    render();
+  };
+  kv.appendChild(go);
+  const reset = el("button", "fire", "Revert");
+  reset.onclick = () => { S.draft = null; S.selected = null; render(); };
+  kv.appendChild(reset);
+  card.appendChild(kv);
+  right.appendChild(card);
+  renderAgent(right);
+}
+
+function labelled(k, node) {
+  const row = el("div", "row");
+  const l = el("span", "mono tiny muted", k);
+  l.style.minWidth = "72px";
+  row.appendChild(l); row.appendChild(node);
+  return row;
+}
+
+function renderAgent(root) {
+  root.appendChild(el("h2", null, "Agent projection"));
+  const tools = S.agentPreview || (S.man.agent || []);
+  const pre = el("pre");
+  pre.textContent = tools.map(t =>
+    `${t.name}(${Object.keys(t.input_schema.properties).join(", ")})` +
+    (t.read_only ? "  [read-only]" : "")).join("\n");
+  root.appendChild(pre);
+  root.appendChild(el("div", "tiny muted",
+    "Same manifest, other projection. If these two lists disagree the implementation is non-conformant (SPEC 7.3) — " +
+    "that check is mechanical, and this page runs it."));
+  if (S.man.diff && S.man.diff.length)
+    root.appendChild(el("div", "err", "divergence: " + S.man.diff.join("; ")));
+}
+
+// ---------------------------------------------------------------- specimen
+function renderSpecimen(left, right) {
+  left.appendChild(el("h2", null, "Recorded run"));
+  const st = S.state || {};
+  left.appendChild(el("div", "note",
+    "A specimen is read-only. Every control is disabled because a recorded run accepts no writes; " +
+    "fork it into a live run to explore."));
+  const meta = el("table");
+  [["run", st.run_id || "—"], ["status", st.status || "—"], ["records", String((st.records || []).length)]]
+    .forEach(([k, v]) => {
+      const tr = el("tr");
+      tr.appendChild(el("td", "mono tiny muted", k));
+      tr.appendChild(el("td", "mono", v));
+      meta.appendChild(tr);
+    });
+  left.appendChild(meta);
+
+  left.appendChild(el("h2", null, "Interventions in this trace"));
+  const ivs = st.interventions || [];
+  if (!ivs.length) left.appendChild(el("div", "muted tiny", "none recorded"));
+  ivs.forEach(iv => {
+    const card = el("div", "step" + (S.selectedMarker === iv.seq ? " cur" : ""));
+    card.style.cursor = "pointer";
+    card.onclick = () => { S.selectedMarker = iv.seq; render(); };
+    card.appendChild(el("div", "id", `seq ${iv.seq} · ${iv.outcome} · caused_by ${iv.caused_by}`));
+    card.appendChild(el("div", "body mono tiny", `${iv.point} = ${JSON.stringify(iv.value)}`));
+    left.appendChild(card);
+  });
+
+  right.appendChild(el("h2", null, "Causality"));
+  if (S.selectedMarker === null) {
+    right.appendChild(el("div", "note",
+      "Click an intervention. It jumps to the observation that preceded it — the link that a " +
+      "tunnel-style tool call cannot express, and the reason this trace is not a log."));
+  } else {
+    const iv = ivs.find(i => i.seq === S.selectedMarker);
+    const prev = (st.records || []).filter(r => iv.caused_by && r.seq === iv.caused_by)[0];
+    const card = el("div", "step cur");
+    card.appendChild(el("div", "id", "intervention"));
+    card.appendChild(el("div", "body mono", `${iv.point} = ${JSON.stringify(iv.value)}  (${iv.outcome})`));
+    card.appendChild(el("div", "id", "caused by"));
+    card.appendChild(el("div", "body mono",
+      prev ? `seq ${prev.seq} · ${prev.kind} ${prev.point} = ${fmt(prev.value)}` : "no preceding observation"));
+    right.appendChild(card);
+  }
+  renderGauges(right);
+}
+
+// ---------------------------------------------------------------- loop
+async function refresh() {
+  try {
+    S.man = await get("/api/manifest");
+    S.state = await get("/api/state");
+    S.err = null;
+  } catch (e) {
+    S.err = String(e);
+  }
+  if (!S.man) { $("left").textContent = "cannot reach the surface"; return; }
+  renderTabs();
+  render();
+}
+
+function connectStream() {
+  if (typeof EventSource === "undefined") { startPolling(); return; }
+  const es = new EventSource(BASE + "/api/events");
+  es.addEventListener("state", (ev) => {
+    try {
+      S.state = JSON.parse(ev.data);
+      S.transportMode = "streaming";
+      $("h-status").textContent = (S.state && S.state.status) || "—";
+      $("h-transport").textContent = "streaming";
+      $("h-transport").className = "badge midrun";
+      if (S.tab === "run" || S.tab === "specimen") render();
+      else if (S.tab === "tutorial" && S.scenario) render();
+    } catch (e) { /* a malformed frame must not kill the surface */ }
+  });
+  es.onerror = () => {
+    S.transportMode = "polling";
+    $("h-transport").textContent = "polling";
+    $("h-transport").className = "badge perstep";
+    es.close();
+    startPolling();
+  };
+}
+
+function startPolling() {
+  S.transportMode = "polling";
+  setInterval(async () => {
+    if (!S.man) return;
+    try {
+      S.state = await get("/api/state");
+      $("h-status").textContent = (S.state && S.state.status) || "—";
+      if (S.tab === "run" || S.tab === "specimen") render();
+      else if (S.tab === "tutorial" && S.scenario) render();
+    } catch (e) { /* the surface outlives transient failures */ }
+  }, 1200);
+}
+
+(async function main() {
+  // Deep-link a tab: #field / #bench / #tutorial / #specimen. Cheap, and it makes the
+  // surface screenshotable and linkable without a router.
+  const h = (location.hash || "").replace("#", "");
+  if (h && TABS.some(t => t.id === h)) S.tab = h;
+  await refresh();
+  connectStream();
+  window.addEventListener("hashchange", () => {
+    const k = (location.hash || "").replace("#", "");
+    if (k && TABS.some(t => t.id === k)) { S.tab = k; renderTabs(); render(); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+{
+  "run_id": "meep-first-pulse",
+  "identity": {
+    "name": "meep-pulse-2d",
+    "adapter": "meep",
+    "domain": "photonics",
+    "code": "Meep 1.33.0-beta",
+    "entry": "python:/opt/conda/envs/mp/bin/python",
+    "description": "2D point source in a PML box. The reference case for genuine per-step liveness."
+  },
+  "records": 1223,
+  "final": {
+    "step": 24320,
+    "time": 304.0,
+    "ez_max": 3.571286614126632e-10,
+    "ez_rms": 1.202517865929013e-10
+  },
+  "interventions": [
+    {
+      "seq": 307,
+      "point": "until",
+      "value": 480.0,
+      "outcome": "accepted",
+      "caused_by": 306
+    },
+    {
+      "seq": 308,
+      "point": "resolution",
+      "value": 60,
+      "outcome": "rejected",
+      "caused_by": 306
+    },
+    {
+      "seq": 309,
+      "point": "until",
+      "value": 9000,
+      "outcome": "rejected",
+      "caused_by": 306
+    },
+    {
+      "seq": 598,
+      "point": "dump_slice",
+      "value": true,
+      "outcome": "accepted",
+      "caused_by": 597
+    }
+  ]
+}

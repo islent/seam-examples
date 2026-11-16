@@ -1,0 +1,19 @@
+{
+  "run_id": "gadget2-plummer",
+  "identity": {
+    "name": "gadget2-plummer",
+    "adapter": "gadget2",
+    "domain": "cosmology",
+    "code": "Gadget-2.0.7 (Gadget2_tree_double)",
+    "entry": "cli:/opt/gadget2/bin/Gadget2_tree_double",
+    "description": "20k-particle Plummer sphere, non-comoving, non-periodic. The paramfile unit trap case."
+  },
+  "records": 12,
+  "final": {
+    "time": 0.0503362,
+    "scale_factor": 0.0,
+    "energy_pot": -4817.22,
+    "energy_kin": 2213.65
+  },
+  "interventions": []
+}

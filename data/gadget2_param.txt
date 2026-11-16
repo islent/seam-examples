@@ -1,0 +1,88 @@
+%------------------------------------------------------------
+% Gadget-2.0.7 parameter file -- non-cosmological, non-periodic
+% dark-halo smoke test.
+% units: kpc / 1e10 Msun / km/s  =>  time unit = 0.9778 Gyr
+%------------------------------------------------------------
+
+%---------------------------- IO
+InitCondFile              ic_plummer.dat
+OutputDir                 output
+SnapshotFileBase          snapshot
+OutputListFilename        output_list.txt
+OutputListOn              0
+EnergyFile                energy.txt
+InfoFile                  info.txt
+TimingsFile               timings.txt
+CpuFile                   cpu.txt
+RestartFile               restart
+ResubmitCommand           ./resubmit.sh
+ResubmitOn                0
+
+%---------------------------- units and cosmology
+ComovingIntegrationOn     0
+PeriodicBoundariesOn      0
+BoxSize                   300.0
+Omega0                    0.3
+OmegaBaryon               0.045
+OmegaLambda               0.7
+HubbleParam               0.7
+UnitLength_in_cm          3.085678e21
+UnitMass_in_g             1.989e43
+UnitVelocity_in_cm_per_s  1.0e5
+GravityConstantInternal   0
+
+%---------------------------- CPU
+TimeLimitCPU              3600
+CpuTimeBetRestartFile     1800
+
+%---------------------------- timestep control
+TimeBegin                 0.0
+TimeMax                   1.0
+ErrTolIntAccuracy         0.025
+MaxSizeTimestep           0.01
+MinSizeTimestep           0.0
+MaxRMSDisplacementFac     0.2
+TypeOfTimestepCriterion   0
+
+%---------------------------- tree
+ErrTolTheta               0.5
+TypeOfOpeningCriterion    1
+ErrTolForceAcc            0.005
+TreeDomainUpdateFrequency 0.025
+
+%---------------------------- memory
+BufferSize                200
+PartAllocFactor           1.3
+TreeAllocFactor           1.5
+
+%---------------------------- output frequency
+TimeBetStatistics         0.05
+TimeOfFirstSnapshot       0.0
+TimeBetSnapshot           0.1
+NumFilesPerSnapshot       1
+NumFilesWrittenInParallel 1
+ICFormat                  1
+SnapFormat                1
+
+%---------------------------- softening (comoving / max physical, kpc)
+SofteningHalo             0.05
+SofteningHaloMaxPhys      0.05
+SofteningDisk             0.0
+SofteningDiskMaxPhys      0.0
+SofteningBulge            0.0
+SofteningBulgeMaxPhys     0.0
+SofteningGas              0.0
+SofteningGasMaxPhys       0.0
+SofteningStars            0.0
+SofteningStarsMaxPhys     0.0
+SofteningBndry            0.0
+SofteningBndryMaxPhys     0.0
+
+%---------------------------- SPH (unused for pure DM)
+DesNumNgb                 40
+MaxNumNgbDeviation        2
+ArtBulkViscConst          0.8
+CourantFac                0.15
+MinGasHsmlFractional      0.25
+InitGasTemp               1.0e4
+MinGasTemp                0.0

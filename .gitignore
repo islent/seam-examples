@@ -1,0 +1,13 @@
+
+!specimens/
+*.egg-info/
+*.log
+*.pyc
+.venv/
+__pycache__/
+build/
+experiments/makie/.julia/
+experiments/makie/live/
+node_modules/
+package-lock.json
+runs/

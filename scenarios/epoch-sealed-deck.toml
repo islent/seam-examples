@@ -1,0 +1,60 @@
+# The tutorial for a code that cannot be steered.
+#
+# Every step here succeeds, and none of them changes the physics. That is the lesson: this
+# manifest declares eight parameters and not one of them is live. A framework that gave you a
+# slider for `nx` would be lying, and the lie would be invisible until somebody trusted it.
+#
+#   seam scenario scenarios/epoch-sealed-deck.toml --host user@hpc-node
+
+[scenario]
+name = "epoch-sealed-deck"
+manifest = "../manifests/epoch.toml"
+requires = ">=0.1"
+
+[[step]]
+id = "the-deal"
+kind = "note"
+note = "EPOCH reads input.deck once, at start-up. Everything in the manifest is sealed except one SIGTERM trigger. This scenario demonstrates that the seam says so out loud."
+
+[[step]]
+id = "it-runs"
+kind = "expect"
+point = "iteration"
+op = "ge"
+value = 1
+timeout = "120s"
+
+[[step]]
+id = "try-nx"
+kind = "intervene"
+point = "nx"
+value = 64
+expect = "rejected"
+
+[[step]]
+id = "try-t-end"
+kind = "intervene"
+point = "t_end"
+value = 1000
+expect = "rejected"
+
+[[step]]
+id = "snapshots-arrive"
+kind = "expect"
+point = "snapshot_index"
+op = "ge"
+value = 1
+timeout = "120s"
+
+[[step]]
+id = "what-you-got"
+kind = "note"
+note = "Two rejections, both traced. To change nx you submit another job; the seam does not pretend otherwise. This is profile L1 and it is a complete answer."
+
+[[step]]
+id = "finish"
+kind = "expect"
+point = "iteration"
+op = "ge"
+value = 6
+timeout = "180s"

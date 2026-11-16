@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seam-reference"
+version = "0.1.0"
+description = "Reference implementation of the Seam Specification: observable agent-simulation interfaces"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Meng Runyu" }]
+keywords = ["agent", "simulation", "scientific computing", "HITL", "observability"]
+classifiers = [
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+seam = "seam.cli:main"
+
+[project.urls]
+Specification = "https://github.com/islent/seam"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+seam = ["../ui/index.html"]
